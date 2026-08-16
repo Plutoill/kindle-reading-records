@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
 <title>阅读记录</title>
-<link rel="stylesheet" href="style.css?v=29" />
+<link rel="stylesheet" href="style.css?v=30" />
 </head>
 <body>
 <div id="message" class="message"></div>
@@ -18,9 +18,8 @@
 <div id="todayPage" class="page">
   <div class="day-switch"><button id="prevDay" class="day-switch-btn">‹</button><span>当日阅读</span><button id="nextDay" class="day-switch-btn">›</button></div>
   <div id="selectedDateLabel" class="selected-date"></div>
-  <div class="hero-label">阅读时长</div>
-  <div id="todayTotal" class="hero-number">0分钟</div>
-  <div id="compare" class="compare">今天还没有阅读记录</div>
+  <div class="chart-head"><span>阅读时长</span><b id="todayTotal">0分钟</b></div>
+  <div id="hourlyChart" class="hourly-chart"></div>
   <div class="divider"></div>
   <div class="section-head"><span>阅读书籍</span><button id="todayAll" class="link-btn">查看全部 ›</button></div>
   <div id="recentList" class="list"></div>
@@ -28,8 +27,7 @@
 </div>
 
 <div id="totalPage" class="page hidden">
-  <div class="stat-row"><span>累计阅读时长</span><b id="yearTotal">0分钟</b></div>
-  <div class="stat-row"><span>阅读天数</span><b id="yearDays">0 天</b></div>
+  <div class="summary-block"><div id="yearTotal" class="summary-total">0分钟</div><div id="yearSummary" class="summary-meta">阅读0天 · 日均0分钟</div></div>
   <div class="divider"></div>
   <div class="section-head year-head"><span id="yearTitle">2026年 · 月度阅读</span><span><button id="prevYear" class="plain-btn">上一年</button><button id="nextYear" class="plain-btn">下一年</button></span></div>
   <div id="months" class="months"></div>
@@ -59,6 +57,6 @@
   </div>
 </div>
 
-<script src="script.js?v=29"></script>
+<script src="script.js?v=30"></script>
 </body>
 </html>
