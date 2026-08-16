@@ -12,6 +12,7 @@ DB="/var/local/appreg.db"
 CONF="/etc/upstart/native-reading-time.conf"
 JOB="native-reading-time"
 DOC="$ROOT/documents/ReadingRecords.sh"
+KUAL_DIR="$ROOT/extensions/reading-records"
 LOG="$BASE/reading-time-install.log"
 DIAG="$BASE/reading-records-diagnostics.log"
 ROOT_LOG="$ROOT/reading-time-install.log"
@@ -63,9 +64,9 @@ touch "$DIAG" 2>/dev/null || true
 rootlog "storage ready; continuing with log=$LOG"
 say "installer start; package=$PKG; ui=$UI_VERSION"
 diag "INSTALL BEGIN ui=$UI_VERSION uid=$(id -u) package=$PKG"
-diag "mount=/mnt/us base=$BASE app=$APP launcher=$DOC"
+diag "mount=/mnt/us base=$BASE app=$APP launcher=$DOC kual=$KUAL_DIR"
 
-for required in native-reading-time-daemon.sh ReadingRecords.sh native-reading-time.conf illusion/ReadingRecords/config.xml illusion/ReadingRecords/index.html illusion/ReadingRecords/style.css illusion/ReadingRecords/script.js; do
+for required in native-reading-time-daemon.sh ReadingRecords.sh native-reading-time.conf illusion/ReadingRecords/config.xml illusion/ReadingRecords/index.html illusion/ReadingRecords/style.css illusion/ReadingRecords/script.js kual/reading-records/config.xml kual/reading-records/menu.json; do
     [ -f "$PKG/$required" ] || fail "缺少 $required"
 done
 
@@ -96,6 +97,15 @@ printf '%s\n' "$UI_VERSION" > "$APP/ui-version.txt" || fail "写入 UI 版本失
 cp "$PKG/ReadingRecords.sh" "$DOC.new" || fail "复制阅读记录入口失败"
 chmod 755 "$DOC.new" || fail "设置入口权限失败"
 mv -f "$DOC.new" "$DOC" || fail "替换阅读记录入口失败"
+
+# KUAL fallback for older firmware where .sh scriptlets are not indexed in the
+# Kindle library (commonly seen on some KV/PW3 jailbreak environments).
+[ -d "$ROOT/extensions" ] || mkdir "$ROOT/extensions" || fail "无法创建 KUAL 扩展目录"
+[ -d "$KUAL_DIR" ] || mkdir "$KUAL_DIR" || fail "无法创建阅读记录 KUAL 入口"
+cp "$PKG/kual/reading-records/config.xml" "$KUAL_DIR/config.xml" || fail "复制 KUAL 配置失败"
+cp "$PKG/kual/reading-records/menu.json" "$KUAL_DIR/menu.json" || fail "复制 KUAL 菜单失败"
+chmod 644 "$KUAL_DIR/config.xml" "$KUAL_DIR/menu.json" 2>/dev/null || true
+diag "installed KUAL fallback: $(ls -l "$KUAL_DIR" 2>&1 | tr '\n' ' ')"
 
 cp "$PKG/native-reading-time-daemon.sh" "$BASE/bin/native-reading-time-daemon.sh.new" || fail "复制统计服务失败"
 chmod 755 "$BASE/bin/native-reading-time-daemon.sh.new" || fail "设置统计服务权限失败"
@@ -136,8 +146,8 @@ diag "installed launcher: $(ls -l "$DOC" 2>&1)"
 diag "installed UI files: $(ls "$APP" 2>&1 | tr '\n' ' ')"
 lipc-set-prop com.lab126.scanner doFullScan 1 >/dev/null 2>&1 || lipc-set-prop com.lab126.scanner triggerUpdate 1 >/dev/null 2>&1 || true
 sync
-say "installed successfully; handler=$APP_ID; UI=$UI_VERSION; launcher=ReadingRecords.sh; data=preserved"
-diag "INSTALL OK handler=$APP_ID ui=$UI_VERSION launcher=$DOC"
+say "installed successfully; handler=$APP_ID; UI=$UI_VERSION; launcher=ReadingRecords.sh; kual=installed; data=preserved"
+diag "INSTALL OK handler=$APP_ID ui=$UI_VERSION launcher=$DOC kual=$KUAL_DIR"
 rootlog "installed successfully; detailed logs are inside /mnt/us/reading-time"
 toast "阅读记录 v31 已安装"
 exit 0
