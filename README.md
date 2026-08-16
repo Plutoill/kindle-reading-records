@@ -11,6 +11,14 @@
 - 支持书籍封面、排序和分页
 - 自动保留已有阅读数据
 
+## 界面预览
+
+<p align="center">
+  <img src="docs/images/preview-daily.png" width="31%" alt="当日阅读" />
+  <img src="docs/images/preview-summary.png" width="31%" alt="累计阅读" />
+  <img src="docs/images/preview-books.png" width="31%" alt="我的书籍" />
+</p>
+
 ## 安装
 
 1. 从 [Releases](../../releases) 下载最新安装包。
