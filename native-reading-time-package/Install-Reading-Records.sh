@@ -1,12 +1,12 @@
 #!/bin/sh
-# Kindle Reading Records v30 — safe upgrade from v17.
+# Kindle Reading Records v31 — safe upgrade from v17.
 # Historical TSV files are never replaced or removed.
 
 ROOT="/mnt/us"
 PKG="$ROOT/native-reading-time-package"
 BASE="$ROOT/reading-time"
-APP="$BASE/illusion/ReadingRecords-v30"
-APP_ID="com.krt.readingrecords.v30"
+APP="$BASE/illusion/ReadingRecords-v31"
+APP_ID="com.krt.readingrecords.v31"
 OLD_APP_ID="com.krt.readingrecords"
 DB="/var/local/appreg.db"
 CONF="/etc/upstart/native-reading-time.conf"
@@ -15,7 +15,7 @@ DOC="$ROOT/documents/ReadingRecords.sh"
 LOG="$BASE/reading-time-install.log"
 DIAG="$BASE/reading-records-diagnostics.log"
 ROOT_LOG="$ROOT/reading-time-install.log"
-UI_VERSION="v30-hourly-chart-summary"
+UI_VERSION="v31-unified-summary"
 ROOT_RW=0
 
 say(){ echo "$(date): $*" >> "$LOG"; }
@@ -86,8 +86,8 @@ done
 
 # Replace application code only. Reading history stays intact.
 if [ -d "$APP" ]; then
-    backup="$BASE/diagnostics/ReadingRecords-v30.previous.$(date +%s)"
-    mv "$APP" "$backup" 2>/dev/null || fail "无法备份旧 v30 UI"
+    backup="$BASE/diagnostics/ReadingRecords-v31.previous.$(date +%s)"
+    mv "$APP" "$backup" 2>/dev/null || fail "无法备份旧 v31 UI"
 fi
 mkdir -p "$APP" || fail "无法创建 UI 目录"
 cp -R "$PKG/illusion/ReadingRecords/." "$APP/" || fail "复制 WAF UI 失败"
@@ -139,5 +139,5 @@ sync
 say "installed successfully; handler=$APP_ID; UI=$UI_VERSION; launcher=ReadingRecords.sh; data=preserved"
 diag "INSTALL OK handler=$APP_ID ui=$UI_VERSION launcher=$DOC"
 rootlog "installed successfully; detailed logs are inside /mnt/us/reading-time"
-toast "阅读记录 v30 已安装"
+toast "阅读记录 v31 已安装"
 exit 0
