@@ -1,0 +1,9 @@
+{
+    "items": [
+        {
+            "name": "阅读记录",
+            "priority": 0,
+            "action": "sh /mnt/us/documents/ReadingRecords.sh"
+        }
+    ]
+}
