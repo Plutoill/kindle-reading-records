@@ -6,6 +6,11 @@ Kindle 阅读记录 v31（基于 v17 统计底座）
 3. 等待 Kindle 恢复主界面后，在搜索框输入 ;log runme。
 4. 等待“阅读记录 v31 已安装”提示，然后从书库打开“阅读记录”。
 
+KPW3 / Kindle Voyage 等设备如果书库不显示 ReadingRecords.sh：
+- 打开 KUAL，选择“阅读记录”即可启动。
+- 安装器会自动创建 /mnt/us/extensions/reading-records/ 备用入口。
+- KUAL 入口与书库入口使用同一份 UI 和阅读数据。
+
 重要说明：
 - 不覆盖、不删除 /mnt/us/reading-time/reading-time.tsv。
 - 不覆盖、不删除 /mnt/us/reading-time/reading-sessions.tsv。
@@ -24,4 +29,4 @@ Kindle 阅读记录 v31（基于 v17 统计底座）
 
 成功日志应包含：
 installed successfully; handler=com.krt.readingrecords.v31; UI=v31-unified-summary;
-launcher=ReadingRecords.sh; data=preserved
+launcher=ReadingRecords.sh; kual=installed; data=preserved
