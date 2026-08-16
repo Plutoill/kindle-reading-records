@@ -1,14 +1,14 @@
 #!/bin/sh
 # Name: 阅读记录
-# Kindle Reading Records v29 launcher
+# Kindle Reading Records v30 launcher
 
-APP_ID="com.krt.readingrecords.v29"
-APP_DIR="/mnt/us/reading-time/illusion/ReadingRecords-v29"
+APP_ID="com.krt.readingrecords.v30"
+APP_DIR="/mnt/us/reading-time/illusion/ReadingRecords-v30"
 APPREG_DB="/var/local/appreg.db"
 DIAG="/mnt/us/reading-time/reading-records-diagnostics.log"
 COVER_MAP="/mnt/us/reading-time/cover-map.tsv"
 CC_DB="/var/local/cc.db"
-UI_VERSION="v29-daily-month-ranking"
+UI_VERSION="v30-hourly-chart-summary"
 
 log(){ echo "$(date): LAUNCH $*" >> "$DIAG"; logger -t reading-records "$*"; }
 log "begin handler=$APP_ID path=$APP_DIR ui=$UI_VERSION script=$0"
