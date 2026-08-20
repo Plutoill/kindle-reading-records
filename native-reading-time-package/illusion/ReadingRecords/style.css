@@ -8,9 +8,9 @@ button:active{background:#000;color:#fff}
 .tabs{height:76px;border-bottom:2px solid #000;white-space:nowrap}
 .tab{width:33.333%;height:74px;font-size:31px;font-weight:bold}
 .tab.active{border-bottom:5px solid #000}
-.page{height:calc(100% - 76px);overflow:hidden;position:relative}
+.page{height:calc(100% - 76px);overflow:hidden}
 #detailPage{height:100%}
-#booksPage{overflow:hidden}
+#booksPage{overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
 .hidden{display:none!important}
 .day-switch{height:64px;line-height:64px;text-align:center;border-bottom:1px solid #aaa;font-size:30px;font-weight:bold;position:relative}
 .day-switch-btn{position:absolute;top:0;width:76px;height:63px;font-size:48px;line-height:55px}
@@ -45,8 +45,8 @@ button:active{background:#000;color:#fff}
 .sortbar>span{float:left;font-weight:bold}
 .sort-btn{float:right;font-size:25px;padding:0 4px}
 .detail-header{height:72px;border-bottom:2px solid #000;text-align:center;position:relative;line-height:70px;font-size:36px;font-weight:bold}
-#detailBody{height:calc(100% - 72px);overflow:hidden;position:relative}
-#detailBody.month-scroll{overflow:hidden}
+#detailBody{height:calc(100% - 72px);overflow:hidden}
+#detailBody.month-scroll{overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
 .back-btn{position:absolute;left:0;top:0;width:70px;height:70px;font-size:52px;line-height:62px}
 .detail-stat{height:68px;border-bottom:1px solid #aaa;line-height:68px;font-size:26px;padding:0 6px}
 .detail-stat b{float:right;font-size:30px}
@@ -60,7 +60,6 @@ button:active{background:#000;color:#fff}
 .day-row .day-time{position:absolute;right:32px;font-weight:bold}
 .day-row .chev{right:2px;top:0;font-size:31px}
 .pager{height:58px;text-align:center;border-top:1px solid #888;margin-top:6px;white-space:nowrap}
-#booksPager,.month-scroll .pager{position:absolute;left:0;right:0;bottom:0;margin-top:0;background:#fff;z-index:4}
 .pager button{height:56px;width:150px;font-size:23px}
 .pager span{display:inline-block;width:130px;font-size:21px;line-height:56px;color:#555}
 .empty{text-align:center;color:#666;font-size:27px;padding-top:90px}

@@ -18,7 +18,7 @@ KUAL_DIR="$ROOT/extensions/reading-records"
 LOG="$BASE/reading-time-install.log"
 DIAG="$BASE/reading-records-diagnostics.log"
 ROOT_LOG="$ROOT/reading-time-install.log"
-UI_VERSION="v35-adaptive-pagination"
+UI_VERSION="v34-lan-sync"
 ROOT_RW=0
 
 say(){ echo "$(date): $*" >> "$LOG"; }
