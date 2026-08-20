@@ -3,6 +3,10 @@
 BASE="/mnt/us/reading-time"
 DATA="$BASE/reading-time.tsv"
 SESSIONS="$BASE/reading-sessions.tsv"
+EVENTS="$BASE/sync-events.tsv"
+DEVICE_FILE="$BASE/device-id"
+SEQUENCE_FILE="$BASE/event-sequence"
+DATA_LOCK="$BASE/.data-lock"
 STATE="$BASE/state"
 REPORT="$BASE/阅读时长统计.txt"
 LOG="$BASE/service.log"
@@ -17,6 +21,29 @@ mkdir -p "$BASE"
 umask 077
 [ -f "$DATA" ] || printf 'date\tbook_id\tseconds\ttitle\n' > "$DATA"
 [ -f "$SESSIONS" ] || printf 'date\tstart\tend\tbook_id\ttitle\n' > "$SESSIONS"
+[ -f "$EVENTS" ] || printf 'event_id\torigin\tsequence\ttype\tdate\tstart\tend\tbook_id\tseconds\ttitle\tcreated_at\n' > "$EVENTS"
+
+device_id="$(sed -n '1p' "$DEVICE_FILE" 2>/dev/null | tr -cd 'A-Za-z0-9._-')"
+[ -n "$device_id" ] || device_id="kindle-unknown"
+
+data_lock() {
+    lock_try=0
+    while ! mkdir "$DATA_LOCK" 2>/dev/null; do
+        lock_owner="$(sed -n '1p' "$DATA_LOCK/pid" 2>/dev/null)"
+        case "$lock_owner" in ''|*[!0-9]*) :;; *) kill -0 "$lock_owner" 2>/dev/null || { rm -f "$DATA_LOCK/pid" 2>/dev/null; rmdir "$DATA_LOCK" 2>/dev/null; };; esac
+        lock_try=$((lock_try+1)); [ "$lock_try" -ge 10 ] && return 1; sleep 1
+    done
+    printf '%s\n' "$$" > "$DATA_LOCK/pid"
+    return 0
+}
+data_unlock() { rm -f "$DATA_LOCK/pid" 2>/dev/null; rmdir "$DATA_LOCK" 2>/dev/null || true; }
+next_event_id() {
+    event_seq="$(sed -n '1p' "$SEQUENCE_FILE" 2>/dev/null)"
+    case "$event_seq" in ''|*[!0-9]*) event_seq=0;; esac
+    event_seq=$((event_seq+1))
+    printf '%s\n' "$event_seq" > "$SEQUENCE_FILE.tmp" && mv "$SEQUENCE_FILE.tmp" "$SEQUENCE_FILE"
+    event_id="$device_id:$event_seq"
+}
 
 prop() { lipc-get-prop "$1" "$2" 2>/dev/null; }
 
@@ -65,7 +92,14 @@ write_report() {
 bucket=0; bucket_id=""; bucket_title=""; bucket_date=""
 flush() {
     if [ "$bucket" -gt 0 ] && [ -n "$bucket_id" ]; then
-        printf '%s\t%s\t%s\t%s\n' "$bucket_date" "$bucket_id" "$bucket" "$bucket_title" >> "$DATA"
+        if data_lock; then
+            next_event_id
+            printf '%s\t%s\t%s\tD\t%s\t\t\t%s\t%s\t%s\t%s\n' "$event_id" "$device_id" "$event_seq" "$bucket_date" "$bucket_id" "$bucket" "$bucket_title" "$(date +%s)" >> "$EVENTS"
+            printf '%s\t%s\t%s\t%s\n' "$bucket_date" "$bucket_id" "$bucket" "$bucket_title" >> "$DATA"
+            data_unlock
+        else
+            echo "$(date): WARNING data lock timeout while saving duration" >> "$LOG"
+        fi
     fi
     bucket=0; bucket_id=""; bucket_title=""; bucket_date=""
 }
@@ -78,7 +112,14 @@ flush_session() {
     end_epoch="$(date +%s)"
     end_clock="$(date +%H:%M:%S)"
     [ -n "$session_date" ] || session_date="$(date +%Y-%m-%d)"
-    printf '%s\t%s\t%s\t%s\t%s\n' "$session_date" "$session_start" "$end_clock" "$session_id" "$session_title" >> "$SESSIONS"
+    if data_lock; then
+        next_event_id
+        printf '%s\t%s\t%s\tS\t%s\t%s\t%s\t%s\t0\t%s\t%s\n' "$event_id" "$device_id" "$event_seq" "$session_date" "$session_start" "$end_clock" "$session_id" "$session_title" "$end_epoch" >> "$EVENTS"
+        printf '%s\t%s\t%s\t%s\t%s\n' "$session_date" "$session_start" "$end_clock" "$session_id" "$session_title" >> "$SESSIONS"
+        data_unlock
+    else
+        echo "$(date): WARNING data lock timeout while saving session" >> "$LOG"
+    fi
     session_start=""; session_date=""; session_id=""; session_title=""
 }
 cleanup() { flush; flush_session; service_state="已停止"; write_report; }
