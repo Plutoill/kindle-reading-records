@@ -1,6 +1,6 @@
 #!/bin/sh
 # Name: 阅读记录
-# Kindle Reading Records v33 launcher
+# Kindle Reading Records v1.3 launcher
 
 APP_ID="com.krt.readingrecords.v33"
 APP_DIR="/mnt/us/reading-time/illusion/ReadingRecords-v33"
@@ -8,10 +8,21 @@ APPREG_DB="/var/local/appreg.db"
 DIAG="/mnt/us/reading-time/reading-records-diagnostics.log"
 COVER_MAP="/mnt/us/reading-time/cover-map.tsv"
 CC_DB="/var/local/cc.db"
-UI_VERSION="v33-month-detail-pagination"
+UI_VERSION="v35-adaptive-pagination"
 
 log(){ echo "$(date): LAUNCH $*" >> "$DIAG"; logger -t reading-records "$*"; }
 log "begin handler=$APP_ID path=$APP_DIR ui=$UI_VERSION script=$0"
+
+# Ask the background listener to discover and merge other Kindles. The UI is
+# opened immediately; synchronization is deliberately non-blocking.
+printf 'state\tpeers\tupdated\tmessage\nsyncing\t0\t%s\t正在同步\n' "$(date +%s)" > "/mnt/us/reading-time/sync-status.tsv.tmp" 2>> "$DIAG" && mv -f "/mnt/us/reading-time/sync-status.tsv.tmp" "/mnt/us/reading-time/sync-status.tsv" || true
+touch "/mnt/us/reading-time/sync-trigger" 2>> "$DIAG" || true
+if [ -x /sbin/initctl ]; then
+    /sbin/initctl status reading-sync 2>/dev/null | grep -q 'start/running' || /sbin/initctl start reading-sync >/dev/null 2>&1 || true
+fi
+sync_pid="$(sed -n '1p' /mnt/us/reading-time/reading-sync.pid 2>/dev/null)"
+case "$sync_pid" in ''|*[!0-9]*) :;; *) kill -USR1 "$sync_pid" 2>/dev/null || true;; esac
+log "LAN sync requested"
 
 # Build a fresh, read-only cover map from Kindle's content catalog. Entries.p_thumbnail
 # is authoritative for both ASIN covers and random personal-document filenames.

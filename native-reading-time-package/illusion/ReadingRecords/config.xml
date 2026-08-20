@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<widget id="com.krt.readingrecords.v33" version="33.0" viewmodes="application"
+<widget id="com.krt.readingrecords.v33" version="35.0" viewmodes="application"
         xmlns="http://www.w3.org/ns/widgets"
         xmlns:kindle="http://kindle.amazon.com/ns/widget-extensions">
     <name xml:lang="zh">阅读记录</name>
