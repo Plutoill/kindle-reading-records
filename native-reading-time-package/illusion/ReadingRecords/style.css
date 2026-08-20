@@ -37,9 +37,9 @@ button:active{background:#000;color:#fff}
 .months{padding-top:2px}
 .month-row{height:62px;position:relative;line-height:60px;cursor:pointer}
 .month-name{position:absolute;left:4px;width:70px;font-size:27px}
-.month-bar{position:absolute;left:82px;right:125px;top:27px;height:7px;background:#ddd}
+.month-bar{position:absolute;left:82px;right:220px;top:27px;height:7px;background:#ddd}
 .month-fill{display:block;height:7px;background:#000}
-.month-value{position:absolute;right:2px;width:108px;text-align:right;font-size:23px;font-weight:bold}
+.month-value{position:absolute;right:2px;width:205px;text-align:right;white-space:nowrap;font-size:22px;font-weight:normal;background:#fff;z-index:2;padding-left:8px}
 .hint{text-align:center;color:#666;font-size:22px;margin-top:12px}
 .sortbar{height:76px;border-bottom:2px solid #000;line-height:76px;font-size:29px;overflow:hidden;margin-top:18px}
 .sortbar>span{float:left;font-weight:bold}
