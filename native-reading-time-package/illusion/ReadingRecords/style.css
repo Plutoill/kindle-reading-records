@@ -45,7 +45,8 @@ button:active{background:#000;color:#fff}
 .sortbar>span{float:left;font-weight:bold}
 .sort-btn{float:right;font-size:25px;padding:0 4px}
 .detail-header{height:72px;border-bottom:2px solid #000;text-align:center;position:relative;line-height:70px;font-size:36px;font-weight:bold}
-#detailBody{overflow:hidden}
+#detailBody{height:calc(100% - 72px);overflow:hidden}
+#detailBody.month-scroll{overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
 .back-btn{position:absolute;left:0;top:0;width:70px;height:70px;font-size:52px;line-height:62px}
 .detail-stat{height:68px;border-bottom:1px solid #aaa;line-height:68px;font-size:26px;padding:0 6px}
 .detail-stat b{float:right;font-size:30px}
