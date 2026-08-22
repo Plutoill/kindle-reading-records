@@ -5,7 +5,7 @@ var DATA_URL="file:///mnt/us/reading-time/reading-time.tsv";
 var SESSIONS_URL="file:///mnt/us/reading-time/reading-sessions.tsv";
 var COVERS_URL="file:///mnt/us/reading-time/cover-map.tsv";
 var SYNC_STATUS_URL="file:///mnt/us/reading-time/sync-status.tsv";
-var data=[],sessions=[],covers={},tab="today",sortMode="recent",detail={type:null},detailPageIndex=0,booksPageIndex=0,todayPageIndex=0,selectedDate=todayKey();
+var data=[],sessions=[],covers={},tab="today",sortMode="recent",detail={type:null},detailPageIndex=0,booksPageIndex=0,todayPageIndex=0,selectedDate=todayKey(),lastSyncUpdate="";
 var DETAIL_PAGE_SIZE=8,MONTH_BAR_BASE=36000;
 var year=new Date().getFullYear();
 function $(id){return document.getElementById(id)}
@@ -23,7 +23,7 @@ function read(url,cb){var x=new XMLHttpRequest(),done=false,sep=url.indexOf("?")
 function parseData(t){var out=[],ls=String(t||"").replace(/\r/g,"").split("\n"),i,p;for(i=0;i<ls.length;i++){if(!ls[i]||/^date\t/.test(ls[i]))continue;p=ls[i].split("\t");if(p.length>=4)out.push({date:p[0],id:p[1],seconds:parseInt(p[2],10)||0,title:p.slice(3).join("\t")||p[1]})}return out}
 function parseSessions(t){var out=[],ls=String(t||"").replace(/\r/g,"").split("\n"),i,p;for(i=0;i<ls.length;i++){if(!ls[i]||/^date\t/.test(ls[i]))continue;p=ls[i].split("\t");if(p.length>=5)out.push({date:p[0],start:p[1],end:p[2],id:p[3],title:p.slice(4).join("\t")||p[3]})}return out}
 function parseCovers(t){var map={},ls=String(t||"").replace(/\r/g,"").split("\n"),i,p,k;for(i=0;i<ls.length;i++){p=ls[i].split("\t");if(p.length>=2){k=String(p[0]||"").replace(/-/g,"").toUpperCase();if(k)map[k]=p.slice(1).join("\t")}}return map}
-function pollSync(left){read(SYNC_STATUS_URL,function(t){var ls=String(t||"").replace(/\r/g,"").split("\n"),p=ls.length>1?ls[1].split("\t"):[],state=p[0]||"syncing",message=p[3]||"正在同步";$('syncStatus').innerHTML=esc(message);if(state==="ok"){load(function(err){if(!err)setTab(tab)});return}if(left>0)setTimeout(function(){pollSync(left-1)},1000)})}
+function pollSync(){read(SYNC_STATUS_URL,function(t){var ls=String(t||"").replace(/\r/g,"").split("\n"),p=ls.length>1?ls[1].split("\t"):[],state=p[0]||"syncing",updated=p[2]||"",labels={none:"未发现设备",found:"已发现设备",syncing:"正在同步",ok:"同步完成"},message=labels[state]||"正在同步",delay=(state==="found"||state==="syncing")?500:2000;$('syncStatus').innerHTML=message;if(state==="ok"&&updated&&updated!==lastSyncUpdate){lastSyncUpdate=updated;load(function(err){if(!err)setTab(tab);setTimeout(pollSync,2000)});return}setTimeout(pollSync,delay)})}
 function load(cb){read(DATA_URL,function(t,e){if(e){cb(e);return}data=parseData(t);read(SESSIONS_URL,function(s){sessions=parseSessions(s||"");read(COVERS_URL,function(c){covers=parseCovers(c||"");cb(null)})})})}
 function rowsDate(d){var a=[],i;for(i=0;i<data.length;i++)if(data[i].date===d)a.push(data[i]);return a}
 function rowsMonth(y,m){var p=y+"-"+pad(m),a=[],i;for(i=0;i<data.length;i++)if(data[i].date.indexOf(p)===0)a.push(data[i]);return a}
@@ -86,6 +86,6 @@ var booksTouchY=null;$("booksPage").ontouchstart=function(e){if(e.touches&&e.tou
 var todayTouchY=null;$("todayPage").ontouchstart=function(e){if(e.touches&&e.touches.length)todayTouchY=e.touches[0].clientY};$("todayPage").ontouchend=function(e){if(todayTouchY===null)return;var y=(e.changedTouches&&e.changedTouches.length)?e.changedTouches[0].clientY:todayTouchY,delta=todayTouchY-y;todayTouchY=null;if(Math.abs(delta)>30)$("todayPage").scrollTop=Math.max(0,$("todayPage").scrollTop+(delta>0?500:-500))};
 window.onresize=function(){applyScrollHeights();if(tab==="books"){booksPageIndex=0;renderBooks()}else if(tab==="today"){todayPageIndex=0;renderToday()}else if($("detailPage").className.indexOf("hidden")<0){detailPageIndex=0;showDetail()}};
 }
-function init(){bind();load(function(err){if(err){$("message").innerHTML="无法读取阅读数据";return}renderToday();pollSync(8)})}
+function init(){bind();load(function(err){if(err){$("message").innerHTML="无法读取阅读数据";return}renderToday();pollSync()})}
 if(document.readyState==="complete"||document.readyState==="interactive")init();else document.addEventListener("DOMContentLoaded",init,false);
 })();

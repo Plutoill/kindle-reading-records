@@ -5,12 +5,14 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <net/if.h>
 #include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/select.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -29,20 +31,16 @@
 #define PIDFILE BASE "/reading-sync.pid"
 #define LOCKDIR BASE "/.data-lock"
 #define LOGFILE BASE "/sync.log"
-#ifndef UDP_PORT
-#define UDP_PORT 17687
-#endif
 #ifndef TCP_PORT
 #define TCP_PORT 17688
 #endif
 #define MAX_PEERS 16
 #define MAX_LINE 8192
-#define MAGIC_DISCOVER "KRR_DISCOVER\t1\t"
-#define MAGIC_HERE "KRR_HERE\t1\t"
 #define HEADER "event_id\torigin\tsequence\ttype\tdate\tstart\tend\tbook_id\tseconds\ttitle\tcreated_at\n"
 
 static volatile sig_atomic_t running = 1;
 static volatile sig_atomic_t trigger_requested = 0;
+static int incoming_sync_completed = 0;
 static char device_id[96];
 
 typedef struct { char **v; size_t n, cap; } Lines;
@@ -139,37 +137,74 @@ static int send_all(int fd,const void *buf,size_t n){const char*p=buf;while(n){s
 static int recv_line(int fd,char *b,size_t cap){size_t n=0;while(n+1<cap){char c;ssize_t r=recv(fd,&c,1,0);if(r<=0)return -1;if(c=='\n'){b[n]=0;return 0;}b[n++]=c;}return -1;}
 static void serve_client(int fd) {
     char cmd[128];struct timeval tv={5,0};setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,&tv,sizeof(tv));setsockopt(fd,SOL_SOCKET,SO_SNDTIMEO,&tv,sizeof(tv));if(recv_line(fd,cmd,sizeof(cmd)))return;
-    if(!strcmp(cmd,"GET\t1")){size_t n=0;char*b=read_all(&n),h[64];if(!b)return;snprintf(h,sizeof(h),"OK\t%zu\n",n);send_all(fd,h,strlen(h));send_all(fd,b,n);free(b);}
-    else if(!strncmp(cmd,"PUSH\t1\t",7)){long n=strtol(cmd+7,NULL,10);char*b;size_t got=0;if(n<0||n>32*1024*1024)return;b=malloc((size_t)n+1);if(!b)return;while(got<(size_t)n){ssize_t r=recv(fd,b+got,(size_t)n-got,0);if(r<=0)break;got+=(size_t)r;}if(got==(size_t)n){b[got]=0;merge_text(b,got);send_all(fd,"OK\n",3);}free(b);}
+    if(!strcmp(cmd,"PING\t1")){char h[160];status_write("found",1,"已发现设备");logmsg("incoming peer discovered");snprintf(h,sizeof(h),"KRR\t1\t%s\n",device_id);send_all(fd,h,strlen(h));}
+    else if(!strcmp(cmd,"GET\t1")){size_t n=0;char*b=read_all(&n),h[64];status_write("syncing",1,"正在同步");logmsg("incoming peer download started");if(!b)return;snprintf(h,sizeof(h),"OK\t%zu\n",n);send_all(fd,h,strlen(h));send_all(fd,b,n);free(b);}
+    else if(!strncmp(cmd,"PUSH\t1\t",7)){long n=strtol(cmd+7,NULL,10);char*b;size_t got=0;status_write("syncing",1,"正在同步");logmsg("incoming peer upload started");if(n<0||n>32*1024*1024)return;b=malloc((size_t)n+1);if(!b)return;while(got<(size_t)n){ssize_t r=recv(fd,b+got,(size_t)n-got,0);if(r<=0)break;got+=(size_t)r;}if(got==(size_t)n){b[got]=0;merge_text(b,got);send_all(fd,"OK\n",3);incoming_sync_completed=1;status_write("ok",1,"同步完成");logmsg("incoming peer sync complete");}free(b);}
 }
 static int connect_peer(const struct sockaddr_in *a){int fd=socket(AF_INET,SOCK_STREAM,0);struct timeval tv={3,0};if(fd<0)return -1;setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,&tv,sizeof(tv));setsockopt(fd,SOL_SOCKET,SO_SNDTIMEO,&tv,sizeof(tv));if(connect(fd,(const struct sockaddr*)a,sizeof(*a))){close(fd);return -1;}return fd;}
 static int peer_get(const Peer*p){int fd=connect_peer(&p->addr);char h[64],*b;long n;size_t got=0;if(fd<0)return -1;if(send_all(fd,"GET\t1\n",6)||recv_line(fd,h,sizeof(h))||strncmp(h,"OK\t",3)){close(fd);return -1;}n=strtol(h+3,NULL,10);if(n<0||n>32*1024*1024){close(fd);return -1;}b=malloc((size_t)n+1);if(!b){close(fd);return -1;}while(got<(size_t)n){ssize_t r=recv(fd,b+got,(size_t)n-got,0);if(r<=0)break;got+=(size_t)r;}close(fd);if(got==(size_t)n)merge_text(b,got);free(b);return got==(size_t)n?0:-1;}
 static int peer_push(const Peer*p){size_t n=0;char*b=read_all(&n),h[64],reply[32];int fd;if(!b)return -1;fd=connect_peer(&p->addr);if(fd<0){free(b);return -1;}snprintf(h,sizeof(h),"PUSH\t1\t%zu\n",n);if(send_all(fd,h,strlen(h))||send_all(fd,b,n)||recv_line(fd,reply,sizeof(reply))||strcmp(reply,"OK")){close(fd);free(b);return -1;}close(fd);free(b);return 0;}
-static int peer_exists(Peer*p,int n,const char*id){int i;for(i=0;i<n;i++)if(!strcmp(p[i].id,id))return 1;return 0;}
-static int discover(int udp,Peer *peers) {
-    struct sockaddr_in dst;char msg[160],buf[256];int yes=1,n=0,i;snprintf(msg,sizeof(msg),"%s%s\n",MAGIC_DISCOVER,device_id);
-    memset(&dst,0,sizeof(dst));dst.sin_family=AF_INET;dst.sin_port=htons(UDP_PORT);dst.sin_addr.s_addr=htonl(INADDR_BROADCAST);setsockopt(udp,SOL_SOCKET,SO_BROADCAST,&yes,sizeof(yes));sendto(udp,msg,strlen(msg),0,(struct sockaddr*)&dst,sizeof(dst));
-    for(i=0;i<12;i++){fd_set rf;struct timeval tv={0,100000};FD_ZERO(&rf);FD_SET(udp,&rf);if(select(udp+1,&rf,NULL,NULL,&tv)>0){struct sockaddr_in from;socklen_t fl=sizeof(from);ssize_t r=recvfrom(udp,buf,sizeof(buf)-1,0,(struct sockaddr*)&from,&fl);if(r>0){char*id;buf[r]=0;if(!strncmp(buf,MAGIC_HERE,strlen(MAGIC_HERE))){id=buf+strlen(MAGIC_HERE);id[strcspn(id,"\t\r\n")]=0;if(strcmp(id,device_id)&&!peer_exists(peers,n,id)&&n<MAX_PEERS){peers[n].addr=from;peers[n].addr.sin_port=htons(TCP_PORT);snprintf(peers[n].id,sizeof(peers[n].id),"%s",id);n++;}}else if(!strncmp(buf,MAGIC_DISCOVER,strlen(MAGIC_DISCOVER))){char out[160];id=buf+strlen(MAGIC_DISCOVER);id[strcspn(id,"\r\n")]=0;if(strcmp(id,device_id)){snprintf(out,sizeof(out),"%s%s\t%d\n",MAGIC_HERE,device_id,TCP_PORT);sendto(udp,out,strlen(out),0,(struct sockaddr*)&from,fl);}}}}}
-    return n;
+static int peer_addr_exists(Peer*p,int n,uint32_t addr){int i;for(i=0;i<n;i++)if(p[i].addr.sin_addr.s_addr==addr)return 1;return 0;}
+/* Probe the local /24 in small parallel batches using direct TCP connections.
+ * A successful connection to KRR's dedicated TCP port is verified by the normal
+ * GET/PUSH protocol immediately afterwards; unrelated services cannot add data. */
+static int scan_subnet(int udp,int tcp,Peer *peers,int n) {
+    struct ifconf ifc;struct ifreq reqs[16];int count,i,host;uint32_t networks[8],self[8];int nets=0;
+    memset(&ifc,0,sizeof(ifc));ifc.ifc_len=sizeof(reqs);ifc.ifc_req=reqs;
+    if(ioctl(udp,SIOCGIFCONF,&ifc)){logmsg("subnet scan unavailable");return n;}
+    count=ifc.ifc_len/(int)sizeof(struct ifreq);
+    for(i=0;i<count&&nets<8;i++){
+        struct ifreq flags;struct sockaddr_in *a=(struct sockaddr_in*)&reqs[i].ifr_addr;uint32_t ip;
+        if(a->sin_family!=AF_INET)continue;memset(&flags,0,sizeof(flags));snprintf(flags.ifr_name,sizeof(flags.ifr_name),"%s",reqs[i].ifr_name);
+        if(ioctl(udp,SIOCGIFFLAGS,&flags)||(flags.ifr_flags&IFF_UP)==0||(flags.ifr_flags&IFF_LOOPBACK))continue;
+        ip=ntohl(a->sin_addr.s_addr);if((ip>>24)==127||ip==0)continue;self[nets]=ip;networks[nets]=ip&0xffffff00U;nets++;
+    }
+    if(!nets){logmsg("subnet scan no active IPv4 interface");return n;}
+    status_write("syncing",n,"正在同步");logmsg("subnet scan started");
+    for(i=0;i<nets&&n<MAX_PEERS;i++){
+        for(host=1;host<255&&n<MAX_PEERS;host+=32){
+            int fd[32],h,maxfd=-1;fd_set wf;struct timeval tv={0,300000};FD_ZERO(&wf);
+            for(h=0;h<32&&host+h<255;h++){
+                struct sockaddr_in dst;int f,fl;uint32_t ip=networks[i]|(uint32_t)(host+h);fd[h]=-1;if(ip==self[i])continue;
+                memset(&dst,0,sizeof(dst));dst.sin_family=AF_INET;dst.sin_port=htons(TCP_PORT);dst.sin_addr.s_addr=htonl(ip);
+                f=socket(AF_INET,SOCK_STREAM,0);if(f<0)continue;fl=fcntl(f,F_GETFL,0);fcntl(f,F_SETFL,fl|O_NONBLOCK);
+                if(connect(f,(struct sockaddr*)&dst,sizeof(dst))==0||errno==EINPROGRESS){fd[h]=f;FD_SET(f,&wf);if(f>maxfd)maxfd=f;}else close(f);
+            }
+            if(maxfd>=0&&select(maxfd+1,NULL,&wf,NULL,&tv)>0){
+                fd_set rf;int round;FD_ZERO(&rf);maxfd=tcp;FD_SET(tcp,&rf);
+                for(h=0;h<32&&host+h<255;h++)if(fd[h]>=0&&FD_ISSET(fd[h],&wf)){
+                    int err=1;socklen_t elen=sizeof(err);if(getsockopt(fd[h],SOL_SOCKET,SO_ERROR,&err,&elen)==0&&err==0&&send(fd[h],"PING\t1\n",7,0)==7){FD_SET(fd[h],&rf);if(fd[h]>maxfd)maxfd=fd[h];}
+                }
+                for(round=0;round<6&&n<MAX_PEERS;round++){
+                    fd_set ready=rf;struct timeval rv={0,100000};int selected=select(maxfd+1,&ready,NULL,NULL,&rv);if(selected<=0)continue;
+                    if(FD_ISSET(tcp,&ready)){int c=accept(tcp,NULL,NULL);if(c>=0){serve_client(c);close(c);}}
+                    for(h=0;h<32&&host+h<255&&n<MAX_PEERS;h++)if(fd[h]>=0&&FD_ISSET(fd[h],&ready)){
+                        char reply[160];ssize_t r=recv(fd[h],reply,sizeof(reply)-1,0);uint32_t ip=networks[i]|(uint32_t)(host+h);FD_CLR(fd[h],&rf);if(r<=0)continue;reply[r]=0;
+                        if(!strncmp(reply,"KRR\t1\t",6)&&!peer_addr_exists(peers,n,htonl(ip))){char *id=reply+6;id[strcspn(id,"\t\r\n")]=0;if(!id[0]||!strcmp(id,device_id))continue;
+                            memset(&peers[n],0,sizeof(peers[n]));peers[n].addr.sin_family=AF_INET;peers[n].addr.sin_port=htons(TCP_PORT);peers[n].addr.sin_addr.s_addr=htonl(ip);snprintf(peers[n].id,sizeof(peers[n].id),"%s",id);n++;logmsg("peer found by subnet scan");}
+                    }
+                }
+            }
+            for(h=0;h<32&&host+h<255;h++)if(fd[h]>=0)close(fd[h]);
+        }
+    }
+    {char m[64];snprintf(m,sizeof(m),"subnet scan completed peers=%d",n);logmsg(m);}return n;
 }
-static void sync_now(int udp) {
-    Peer peers[MAX_PEERS];int n,i,ok=0;status_write("syncing",0,"正在同步");n=discover(udp,peers);
-    for(i=0;i<n;i++)if(!peer_get(&peers[i]))ok++;
-    for(i=0;i<n;i++)peer_push(&peers[i]);
-    if(ok){char m[64];snprintf(m,sizeof(m),"已同步 %d 台设备",ok);status_write("ok",ok,m);}
+static void sync_now(int udp,int tcp) {
+    Peer peers[MAX_PEERS];int n=0,i,ok=0;incoming_sync_completed=0;status_write("syncing",0,"正在同步");n=scan_subnet(udp,tcp,peers,n);
+    if(n>0){status_write("found",n,"已发现设备");usleep(1000000);status_write("syncing",n,"正在同步");}
+    for(i=0;i<n;i++)if(!peer_get(&peers[i])){ok++;logmsg("peer download complete");}else logmsg("peer download failed");
+    for(i=0;i<n;i++)if(!peer_push(&peers[i]))logmsg("peer upload complete");else logmsg("peer upload failed");
+    if(ok||incoming_sync_completed)status_write("ok",ok?ok:1,"同步完成");
     else status_write("none",0,"未发现设备");unlink(TRIGGER);
-}
-static void udp_reply(int udp) {
-    struct sockaddr_in from;socklen_t fl=sizeof(from);char b[256],out[160];ssize_t r=recvfrom(udp,b,sizeof(b)-1,0,(struct sockaddr*)&from,&fl);if(r<=0)return;b[r]=0;
-    if(!strncmp(b,MAGIC_DISCOVER,strlen(MAGIC_DISCOVER))){char*id=b+strlen(MAGIC_DISCOVER);id[strcspn(id,"\r\n")]=0;if(strcmp(id,device_id)){snprintf(out,sizeof(out),"%s%s\t%d\n",MAGIC_HERE,device_id,TCP_PORT);sendto(udp,out,strlen(out),0,(struct sockaddr*)&from,fl);}}
 }
 static void load_device_id(void){FILE*f=fopen(DEVICE,"r");if(f){fgets(device_id,sizeof(device_id),f);fclose(f);device_id[strcspn(device_id,"\r\n")]=0;}if(!device_id[0])snprintf(device_id,sizeof(device_id),"unknown-%ld",(long)getpid());}
 int main(int argc, char **argv) {
     int udp,tcp,yes=1;struct sockaddr_in a;struct sigaction sa;FILE *pf;signal(SIGTERM,stop_now);signal(SIGINT,stop_now);memset(&sa,0,sizeof(sa));sa.sa_handler=request_sync;sigemptyset(&sa.sa_mask);sigaction(SIGUSR1,&sa,NULL);signal(SIGPIPE,SIG_IGN);load_device_id();migrate_legacy();
     if(argc>1&&!strcmp(argv[1],"--migrate-only"))return 0;
     udp=socket(AF_INET,SOCK_DGRAM,0);tcp=socket(AF_INET,SOCK_STREAM,0);if(udp<0||tcp<0)return 1;setsockopt(udp,SOL_SOCKET,SO_REUSEADDR,&yes,sizeof(yes));setsockopt(tcp,SOL_SOCKET,SO_REUSEADDR,&yes,sizeof(yes));
-    memset(&a,0,sizeof(a));a.sin_family=AF_INET;a.sin_addr.s_addr=htonl(INADDR_ANY);a.sin_port=htons(UDP_PORT);if(bind(udp,(struct sockaddr*)&a,sizeof(a)))return 2;a.sin_port=htons(TCP_PORT);if(bind(tcp,(struct sockaddr*)&a,sizeof(a))||listen(tcp,4))return 3;
+    memset(&a,0,sizeof(a));a.sin_family=AF_INET;a.sin_addr.s_addr=htonl(INADDR_ANY);a.sin_port=htons(TCP_PORT);if(bind(tcp,(struct sockaddr*)&a,sizeof(a))||listen(tcp,4))return 3;
     pf=fopen(PIDFILE,"w");if(pf){fprintf(pf,"%ld\n",(long)getpid());fclose(pf);}status_write("idle",0,"等待同步");logmsg("reading-syncd started");
-    while(running){fd_set rf;int max=udp>tcp?udp:tcp;if(trigger_requested||access(TRIGGER,F_OK)==0){trigger_requested=0;sync_now(udp);continue;}FD_ZERO(&rf);FD_SET(udp,&rf);FD_SET(tcp,&rf);if(select(max+1,&rf,NULL,NULL,NULL)>0){if(FD_ISSET(udp,&rf))udp_reply(udp);if(FD_ISSET(tcp,&rf)){int c=accept(tcp,NULL,NULL);if(c>=0){serve_client(c);close(c);}}}}
+    while(running){fd_set rf;int max=tcp;if(trigger_requested||access(TRIGGER,F_OK)==0){trigger_requested=0;sync_now(udp,tcp);continue;}FD_ZERO(&rf);FD_SET(tcp,&rf);if(select(max+1,&rf,NULL,NULL,NULL)>0&&FD_ISSET(tcp,&rf)){int c=accept(tcp,NULL,NULL);if(c>=0){serve_client(c);close(c);}}}
     unlink(PIDFILE);close(udp);close(tcp);logmsg("reading-syncd stopped");return 0;
 }

@@ -5,9 +5,9 @@
 ROOT="/mnt/us"
 PKG="$ROOT/native-reading-time-package"
 BASE="$ROOT/reading-time"
-APP="$BASE/illusion/ReadingRecords-v33"
-APP_ID="com.krt.readingrecords.v33"
-OLD_APP_ID="com.krt.readingrecords"
+APP="$BASE/illusion/ReadingRecords-v34"
+APP_ID="com.krt.readingrecords.v34"
+OLD_APP_ID="com.krt.readingrecords.v33"
 DB="/var/local/appreg.db"
 CONF="/etc/upstart/native-reading-time.conf"
 JOB="native-reading-time"
@@ -18,7 +18,7 @@ KUAL_DIR="$ROOT/extensions/reading-records"
 LOG="$BASE/reading-time-install.log"
 DIAG="$BASE/reading-records-diagnostics.log"
 ROOT_LOG="$ROOT/reading-time-install.log"
-UI_VERSION="v40-measured-scroll"
+UI_VERSION="v48-bidirectional-sync-status"
 ROOT_RW=0
 
 say(){ echo "$(date): $*" >> "$LOG"; }
@@ -92,8 +92,8 @@ done
 
 # Replace application code only. Reading history stays intact.
 if [ -d "$APP" ]; then
-    backup="$BASE/diagnostics/ReadingRecords-v33.previous.$(date +%s)"
-    mv "$APP" "$backup" 2>/dev/null || fail "无法备份旧 v33 UI"
+    backup="$BASE/diagnostics/ReadingRecords-v34.previous.$(date +%s)"
+    mv "$APP" "$backup" 2>/dev/null || fail "无法备份旧 v34 UI"
 fi
 mkdir -p "$APP" || fail "无法创建 UI 目录"
 cp -R "$PKG/illusion/ReadingRecords/." "$APP/" || fail "复制 WAF UI 失败"
@@ -126,17 +126,43 @@ chmod 755 "$BASE/bin/reading-syncd.new" || fail "设置同步服务权限失败"
 mv -f "$BASE/bin/reading-syncd.new" "$BASE/bin/reading-syncd" || fail "替换同步服务失败"
 diag "sync binary installed: machine=$machine source=$sync_binary"
 
-hardware_id="$(sed -n '1p' /proc/usid 2>/dev/null | tr -cd 'A-Za-z0-9')"
-if [ -n "$hardware_id" ] && command -v md5sum >/dev/null 2>&1; then
-    hardware_hash="$(printf '%s' "$hardware_id" | md5sum | awk '{print $1}')"
-    printf 'kindle-%s\n' "$hardware_hash" > "$BASE/device-id" || fail "创建设备标识失败"
-elif [ ! -s "$BASE/device-id" ]; then
-    new_device_id="$(sed -n '1p' /proc/sys/kernel/random/uuid 2>/dev/null | tr -cd 'A-Za-z0-9-')"
+old_device_id="$(sed -n '1p' "$BASE/device-id" 2>/dev/null | tr -cd 'A-Za-z0-9._-')"
+case "$old_device_id" in
+    ''|kindle-|kindle-unknown|unknown-*) repair_device_id=1 ;;
+    *) repair_device_id=0 ;;
+esac
+if [ "$repair_device_id" -eq 1 ]; then
+    hardware_id="$(sed -n '1p' /proc/usid 2>/dev/null | tr -cd 'A-Za-z0-9')"
+    new_device_id=""
+    if [ -n "$hardware_id" ] && command -v md5sum >/dev/null 2>&1; then
+        hardware_hash="$(printf '%s' "$hardware_id" | md5sum 2>/dev/null | sed -n 's/[[:space:]].*//p' | tr -cd 'A-Fa-f0-9')"
+        [ "${#hardware_hash}" -ge 16 ] && new_device_id="kindle-$hardware_hash"
+    fi
+    if [ -z "$new_device_id" ] && [ -n "$hardware_id" ] && command -v cksum >/dev/null 2>&1; then
+        set -- $(printf '%s' "$hardware_id" | cksum 2>/dev/null)
+        case "$1:$2" in *[!0-9:]*|:) : ;; *) new_device_id="kindle-c$1-$2" ;; esac
+    fi
+    if [ -z "$new_device_id" ]; then
+        random_id="$(sed -n '1p' /proc/sys/kernel/random/uuid 2>/dev/null | tr -cd 'A-Za-z0-9-')"
+        [ -n "$random_id" ] && new_device_id="kindle-$random_id"
+    fi
     [ -n "$new_device_id" ] || new_device_id="kindle-$(date +%s)-$$"
-    printf '%s\n' "$new_device_id" > "$BASE/device-id" || fail "创建设备标识失败"
+    printf '%s\n' "$new_device_id" > "$BASE/device-id.new" || fail "创建设备标识失败"
+    mv -f "$BASE/device-id.new" "$BASE/device-id" || fail "替换设备标识失败"
+    diag "sync identity repaired: old_length=${#old_device_id} new_length=${#new_device_id}"
+else
+    new_device_id="$old_device_id"
+    diag "sync identity preserved: length=${#new_device_id}"
 fi
 chmod 600 "$BASE/device-id" 2>/dev/null || true
 diag "sync identity ready: $(wc -c < "$BASE/device-id" 2>/dev/null) bytes"
+
+if [ -f "$BASE/sync-events.tsv" ]; then
+    tab="$(printf '\t')"
+    sed -e "s|^kindle-:\([0-9][0-9]*\)${tab}kindle-${tab}|${new_device_id}:\1${tab}${new_device_id}${tab}|" -e "s|^kindle-unknown:\([0-9][0-9]*\)${tab}kindle-unknown${tab}|${new_device_id}:\1${tab}${new_device_id}${tab}|" "$BASE/sync-events.tsv" > "$BASE/sync-events.tsv.identity-new" || fail "迁移旧同步事件失败"
+    mv -f "$BASE/sync-events.tsv.identity-new" "$BASE/sync-events.tsv" || fail "替换同步事件失败"
+    diag "sync event identity migration complete"
+fi
 
 "$BASE/bin/reading-syncd" --migrate-only >> "$BASE/sync.log" 2>&1 || fail "迁移历史同步数据失败"
 diag "sync journal ready: $(wc -l < "$BASE/sync-events.tsv" 2>/dev/null) lines"
