@@ -31,6 +31,7 @@
 #define PIDFILE BASE "/reading-sync.pid"
 #define LOCKDIR BASE "/.data-lock"
 #define LOGFILE BASE "/sync.log"
+#define LOG_LIMIT (128 * 1024)
 #ifndef TCP_PORT
 #define TCP_PORT 17688
 #endif
@@ -56,8 +57,12 @@ static char *split_next(char **cursor, const char *delims) {
 
 static void stop_now(int sig) { (void)sig; running = 0; }
 static void request_sync(int sig) { (void)sig; trigger_requested = 1; }
+static void rotate_log(void) {
+    struct stat st;char old[256];if(stat(LOGFILE,&st)||st.st_size<LOG_LIMIT)return;
+    snprintf(old,sizeof(old),"%s.1",LOGFILE);unlink(old);rename(LOGFILE,old);
+}
 static void logmsg(const char *msg) {
-    FILE *f = fopen(LOGFILE, "a"); time_t now = time(NULL);
+    FILE *f;time_t now=time(NULL);rotate_log();f=fopen(LOGFILE,"a");
     if (f) { fprintf(f, "%ld: %s\n", (long)now, msg); fclose(f); }
 }
 static void status_write(const char *state, int peers, const char *message) {
@@ -137,12 +142,12 @@ static int send_all(int fd,const void *buf,size_t n){const char*p=buf;while(n){s
 static int recv_line(int fd,char *b,size_t cap){size_t n=0;while(n+1<cap){char c;ssize_t r=recv(fd,&c,1,0);if(r<=0)return -1;if(c=='\n'){b[n]=0;return 0;}b[n++]=c;}return -1;}
 static void serve_client(int fd) {
     char cmd[128];struct timeval tv={5,0};setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,&tv,sizeof(tv));setsockopt(fd,SOL_SOCKET,SO_SNDTIMEO,&tv,sizeof(tv));if(recv_line(fd,cmd,sizeof(cmd)))return;
-    if(!strcmp(cmd,"PING\t1")){char h[160];status_write("found",1,"已发现设备");logmsg("incoming peer discovered");snprintf(h,sizeof(h),"KRR\t1\t%s\n",device_id);send_all(fd,h,strlen(h));}
-    else if(!strcmp(cmd,"GET\t1")){size_t n=0;char*b=read_all(&n),h[64];status_write("syncing",1,"正在同步");logmsg("incoming peer download started");if(!b)return;snprintf(h,sizeof(h),"OK\t%zu\n",n);send_all(fd,h,strlen(h));send_all(fd,b,n);free(b);}
-    else if(!strncmp(cmd,"PUSH\t1\t",7)){long n=strtol(cmd+7,NULL,10);char*b;size_t got=0;status_write("syncing",1,"正在同步");logmsg("incoming peer upload started");if(n<0||n>32*1024*1024)return;b=malloc((size_t)n+1);if(!b)return;while(got<(size_t)n){ssize_t r=recv(fd,b+got,(size_t)n-got,0);if(r<=0)break;got+=(size_t)r;}if(got==(size_t)n){b[got]=0;merge_text(b,got);send_all(fd,"OK\n",3);incoming_sync_completed=1;status_write("ok",1,"同步完成");logmsg("incoming peer sync complete");}free(b);}
+    if(!strcmp(cmd,"PING\t1")){char h[160];status_write("found",1,"已发现设备");snprintf(h,sizeof(h),"KRR\t1\t%s\n",device_id);send_all(fd,h,strlen(h));}
+    else if(!strcmp(cmd,"GET\t1")){size_t n=0;char*b=read_all(&n),h[64];status_write("syncing",1,"正在同步");if(!b){logmsg("sync incoming fail stage=read-local");return;}snprintf(h,sizeof(h),"OK\t%zu\n",n);if(send_all(fd,h,strlen(h))||send_all(fd,b,n))logmsg("sync incoming fail stage=send");free(b);}
+    else if(!strncmp(cmd,"PUSH\t1\t",7)){long n=strtol(cmd+7,NULL,10);char*b;size_t got=0;int added;char summary[96];status_write("syncing",1,"正在同步");if(n<0||n>32*1024*1024){logmsg("sync incoming fail stage=size");return;}b=malloc((size_t)n+1);if(!b){logmsg("sync incoming fail stage=memory");return;}while(got<(size_t)n){ssize_t r=recv(fd,b+got,(size_t)n-got,0);if(r<=0)break;got+=(size_t)r;}if(got==(size_t)n){b[got]=0;added=merge_text(b,got);if(added>=0&&send_all(fd,"OK\n",3)==0){incoming_sync_completed=1;status_write("ok",1,"同步完成");snprintf(summary,sizeof(summary),"sync incoming ok new_events=%d",added);logmsg(summary);}else logmsg("sync incoming fail stage=merge");}else logmsg("sync incoming fail stage=receive");free(b);}
 }
 static int connect_peer(const struct sockaddr_in *a){int fd=socket(AF_INET,SOCK_STREAM,0);struct timeval tv={3,0};if(fd<0)return -1;setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,&tv,sizeof(tv));setsockopt(fd,SOL_SOCKET,SO_SNDTIMEO,&tv,sizeof(tv));if(connect(fd,(const struct sockaddr*)a,sizeof(*a))){close(fd);return -1;}return fd;}
-static int peer_get(const Peer*p){int fd=connect_peer(&p->addr);char h[64],*b;long n;size_t got=0;if(fd<0)return -1;if(send_all(fd,"GET\t1\n",6)||recv_line(fd,h,sizeof(h))||strncmp(h,"OK\t",3)){close(fd);return -1;}n=strtol(h+3,NULL,10);if(n<0||n>32*1024*1024){close(fd);return -1;}b=malloc((size_t)n+1);if(!b){close(fd);return -1;}while(got<(size_t)n){ssize_t r=recv(fd,b+got,(size_t)n-got,0);if(r<=0)break;got+=(size_t)r;}close(fd);if(got==(size_t)n)merge_text(b,got);free(b);return got==(size_t)n?0:-1;}
+static int peer_get(const Peer*p,int *added_out){int fd=connect_peer(&p->addr),added=-1;char h[64],*b;long n;size_t got=0;if(added_out)*added_out=0;if(fd<0)return -1;if(send_all(fd,"GET\t1\n",6)||recv_line(fd,h,sizeof(h))||strncmp(h,"OK\t",3)){close(fd);return -1;}n=strtol(h+3,NULL,10);if(n<0||n>32*1024*1024){close(fd);return -1;}b=malloc((size_t)n+1);if(!b){close(fd);return -1;}while(got<(size_t)n){ssize_t r=recv(fd,b+got,(size_t)n-got,0);if(r<=0)break;got+=(size_t)r;}close(fd);if(got==(size_t)n)added=merge_text(b,got);free(b);if(added>=0&&added_out)*added_out=added;return added>=0?0:-1;}
 static int peer_push(const Peer*p){size_t n=0;char*b=read_all(&n),h[64],reply[32];int fd;if(!b)return -1;fd=connect_peer(&p->addr);if(fd<0){free(b);return -1;}snprintf(h,sizeof(h),"PUSH\t1\t%zu\n",n);if(send_all(fd,h,strlen(h))||send_all(fd,b,n)||recv_line(fd,reply,sizeof(reply))||strcmp(reply,"OK")){close(fd);free(b);return -1;}close(fd);free(b);return 0;}
 static int peer_addr_exists(Peer*p,int n,uint32_t addr){int i;for(i=0;i<n;i++)if(p[i].addr.sin_addr.s_addr==addr)return 1;return 0;}
 /* Probe the local /24 in small parallel batches using direct TCP connections.
@@ -160,7 +165,7 @@ static int scan_subnet(int udp,int tcp,Peer *peers,int n) {
         ip=ntohl(a->sin_addr.s_addr);if((ip>>24)==127||ip==0)continue;self[nets]=ip;networks[nets]=ip&0xffffff00U;nets++;
     }
     if(!nets){logmsg("subnet scan no active IPv4 interface");return n;}
-    status_write("syncing",n,"正在同步");logmsg("subnet scan started");
+    status_write("syncing",n,"正在同步");
     for(i=0;i<nets&&n<MAX_PEERS;i++){
         for(host=1;host<255&&n<MAX_PEERS;host+=32){
             int fd[32],h,maxfd=-1;fd_set wf;struct timeval tv={0,300000};FD_ZERO(&wf);
@@ -181,22 +186,23 @@ static int scan_subnet(int udp,int tcp,Peer *peers,int n) {
                     for(h=0;h<32&&host+h<255&&n<MAX_PEERS;h++)if(fd[h]>=0&&FD_ISSET(fd[h],&ready)){
                         char reply[160];ssize_t r=recv(fd[h],reply,sizeof(reply)-1,0);uint32_t ip=networks[i]|(uint32_t)(host+h);FD_CLR(fd[h],&rf);if(r<=0)continue;reply[r]=0;
                         if(!strncmp(reply,"KRR\t1\t",6)&&!peer_addr_exists(peers,n,htonl(ip))){char *id=reply+6;id[strcspn(id,"\t\r\n")]=0;if(!id[0]||!strcmp(id,device_id))continue;
-                            memset(&peers[n],0,sizeof(peers[n]));peers[n].addr.sin_family=AF_INET;peers[n].addr.sin_port=htons(TCP_PORT);peers[n].addr.sin_addr.s_addr=htonl(ip);snprintf(peers[n].id,sizeof(peers[n].id),"%s",id);n++;logmsg("peer found by subnet scan");}
+                            memset(&peers[n],0,sizeof(peers[n]));peers[n].addr.sin_family=AF_INET;peers[n].addr.sin_port=htons(TCP_PORT);peers[n].addr.sin_addr.s_addr=htonl(ip);snprintf(peers[n].id,sizeof(peers[n].id),"%s",id);n++;}
                     }
                 }
             }
             for(h=0;h<32&&host+h<255;h++)if(fd[h]>=0)close(fd[h]);
         }
     }
-    {char m[64];snprintf(m,sizeof(m),"subnet scan completed peers=%d",n);logmsg(m);}return n;
+    return n;
 }
 static void sync_now(int udp,int tcp) {
-    Peer peers[MAX_PEERS];int n=0,i,ok=0;incoming_sync_completed=0;status_write("syncing",0,"正在同步");n=scan_subnet(udp,tcp,peers,n);
+    Peer peers[MAX_PEERS];int n=0,i,ok=0,received=0,failures=0;time_t started=time(NULL);char summary[160];incoming_sync_completed=0;status_write("syncing",0,"正在同步");n=scan_subnet(udp,tcp,peers,n);
     if(n>0){status_write("found",n,"已发现设备");usleep(1000000);status_write("syncing",n,"正在同步");}
-    for(i=0;i<n;i++)if(!peer_get(&peers[i])){ok++;logmsg("peer download complete");}else logmsg("peer download failed");
-    for(i=0;i<n;i++)if(!peer_push(&peers[i]))logmsg("peer upload complete");else logmsg("peer upload failed");
-    if(ok||incoming_sync_completed)status_write("ok",ok?ok:1,"同步完成");
-    else status_write("none",0,"未发现设备");unlink(TRIGGER);
+    for(i=0;i<n;i++){int added=0;if(!peer_get(&peers[i],&added)){ok++;received+=added;}else{snprintf(summary,sizeof(summary),"sync fail stage=download peer=%s",peers[i].id);logmsg(summary);failures++;}}
+    for(i=0;i<n;i++)if(peer_push(&peers[i])){snprintf(summary,sizeof(summary),"sync fail stage=upload peer=%s",peers[i].id);logmsg(summary);failures++;}
+    if(ok||incoming_sync_completed){status_write("ok",ok?ok:1,"同步完成");if(ok){snprintf(summary,sizeof(summary),"sync ok peers=%d new_events=%d failures=%d duration=%ld",ok,received,failures,(long)(time(NULL)-started));logmsg(summary);}}
+    else{status_write("none",0,"未发现设备");if(n==0){snprintf(summary,sizeof(summary),"sync none duration=%ld",(long)(time(NULL)-started));logmsg(summary);}}
+    unlink(TRIGGER);unlink(STATUS ".tmp");
 }
 static void load_device_id(void){FILE*f=fopen(DEVICE,"r");if(f){fgets(device_id,sizeof(device_id),f);fclose(f);device_id[strcspn(device_id,"\r\n")]=0;}if(!device_id[0])snprintf(device_id,sizeof(device_id),"unknown-%ld",(long)getpid());}
 int main(int argc, char **argv) {

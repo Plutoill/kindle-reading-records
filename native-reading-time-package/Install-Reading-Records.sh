@@ -21,6 +21,34 @@ ROOT_LOG="$ROOT/reading-time-install.log"
 UI_VERSION="v48-bidirectional-sync-status"
 ROOT_RW=0
 
+rotate_log(){
+    rotate_path="$1"; rotate_limit="$2"
+    [ -f "$rotate_path" ] || return 0
+    rotate_size="$(wc -c < "$rotate_path" 2>/dev/null)"
+    case "$rotate_size" in ''|*[!0-9]*) return 0;; esac
+    [ "$rotate_size" -lt "$rotate_limit" ] && return 0
+    rm -f "$rotate_path.1" 2>/dev/null || true
+    mv -f "$rotate_path" "$rotate_path.1" 2>/dev/null || true
+}
+prune_ui_backups(){
+    backup_number=0
+    ls -1dt "$BASE"/diagnostics/ReadingRecords-v*.previous.* 2>/dev/null | while IFS= read -r old_backup; do
+        [ -d "$old_backup" ] || continue
+        backup_number=$((backup_number+1))
+        [ "$backup_number" -le 2 ] && continue
+        case "$old_backup" in
+            "$BASE"/diagnostics/ReadingRecords-v[0-9]*.previous.[0-9]*)
+                backup_kb="$(du -sk "$old_backup" 2>/dev/null | awk '{print $1}')"
+                if rm -rf "$old_backup" 2>/dev/null; then
+                    diag "pruned old UI backup: path=$old_backup size_kb=${backup_kb:-unknown}"
+                else
+                    diag "WARNING unable to prune UI backup: $old_backup"
+                fi
+                ;;
+            *) diag "WARNING refused unsafe UI backup path: $old_backup" ;;
+        esac
+    done
+}
 say(){ echo "$(date): $*" >> "$LOG"; }
 diag(){ echo "$(date): $*" >> "$DIAG"; }
 toast(){ lipc-set-prop com.lab126.system toasterMessage "$1" >/dev/null 2>&1 || true; }
@@ -62,6 +90,7 @@ elif [ ! -d "$BASE" ]; then
     exit 1
 fi
 : > "$LOG" 2>/dev/null || true
+rotate_log "$DIAG" 262144
 touch "$DIAG" 2>/dev/null || true
 rootlog "storage ready; continuing with log=$LOG"
 say "installer start; package=$PKG; ui=$UI_VERSION"
@@ -74,6 +103,9 @@ done
 
 # Freeze both writers before upgrading or migrating data.
 if [ -x /sbin/initctl ]; then /sbin/initctl stop "$JOB" >/dev/null 2>&1 || true; /sbin/initctl stop "$SYNC_JOB" >/dev/null 2>&1 || true; fi
+rotate_log "$BASE/service.log" 131072
+rotate_log "$BASE/upstart.log" 65536
+rotate_log "$BASE/sync-upstart.log" 65536
 
 if [ ! -d "$BASE/bin" ]; then mkdir "$BASE/bin" 2>> "$ROOT_LOG" || fail "无法创建 $BASE/bin"; fi
 if [ ! -d "$BASE/illusion" ]; then mkdir "$BASE/illusion" 2>> "$ROOT_LOG" || fail "无法创建 $BASE/illusion"; fi
@@ -204,6 +236,7 @@ diag "service status: $(/sbin/initctl status "$JOB" 2>&1)"
 diag "sync service status: $(/sbin/initctl status "$SYNC_JOB" 2>&1)"
 diag "installed launcher: $(ls -l "$DOC" 2>&1)"
 diag "installed UI files: $(ls "$APP" 2>&1 | tr '\n' ' ')"
+prune_ui_backups
 lipc-set-prop com.lab126.scanner doFullScan 1 >/dev/null 2>&1 || lipc-set-prop com.lab126.scanner triggerUpdate 1 >/dev/null 2>&1 || true
 sync
 say "installed successfully; handler=$APP_ID; UI=$UI_VERSION; launcher=ReadingRecords.sh; kual=installed; data=preserved"

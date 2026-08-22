@@ -22,6 +22,9 @@ KPW3 / Kindle Voyage 等设备如果书库不显示 ReadingRecords.sh：
 - UI 只使用 HTML/CSS/JavaScript，没有生成或内置图片。
 - 两台 Kindle 位于同一 Wi-Fi、保持唤醒并同时打开“阅读记录”时自动同步。
 - 同步按事件去重，失败不影响本机统计，也不需要手机、电脑或云端。
+- 诊断日志达到上限后自动轮换，只保留当前文件和一份旧日志。
+- 重复安装产生的 UI 备份只保留最近两份。
+- reading-time.tsv、reading-sessions.tsv 与 sync-events.tsv 永远不会按日志清理。
 
 诊断文件：
 - /mnt/us/reading-time/reading-time-install.log：安装结果。

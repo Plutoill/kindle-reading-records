@@ -17,8 +17,19 @@ SAVE_INTERVAL=90
 STATE_INTERVAL=90
 EDGE_CREDIT_MAX=5
 
+rotate_log(){
+    rotate_path="$1"; rotate_limit="$2"
+    [ -f "$rotate_path" ] || return 0
+    rotate_size="$(wc -c < "$rotate_path" 2>/dev/null)"
+    case "$rotate_size" in ''|*[!0-9]*) return 0;; esac
+    [ "$rotate_size" -lt "$rotate_limit" ] && return 0
+    rm -f "$rotate_path.1" 2>/dev/null || true
+    mv -f "$rotate_path" "$rotate_path.1" 2>/dev/null || true
+}
+
 mkdir -p "$BASE"
 umask 077
+rotate_log "$LOG" 131072
 [ -f "$DATA" ] || printf 'date\tbook_id\tseconds\ttitle\n' > "$DATA"
 [ -f "$SESSIONS" ] || printf 'date\tstart\tend\tbook_id\ttitle\n' > "$SESSIONS"
 [ -f "$EVENTS" ] || printf 'event_id\torigin\tsequence\ttype\tdate\tstart\tend\tbook_id\tseconds\ttitle\tcreated_at\n' > "$EVENTS"

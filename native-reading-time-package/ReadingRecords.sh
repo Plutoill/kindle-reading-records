@@ -10,6 +10,16 @@ COVER_MAP="/mnt/us/reading-time/cover-map.tsv"
 CC_DB="/var/local/cc.db"
 UI_VERSION="v48-bidirectional-sync-status"
 
+rotate_log(){
+    rotate_path="$1"; rotate_limit="$2"
+    [ -f "$rotate_path" ] || return 0
+    rotate_size="$(wc -c < "$rotate_path" 2>/dev/null)"
+    case "$rotate_size" in ''|*[!0-9]*) return 0;; esac
+    [ "$rotate_size" -lt "$rotate_limit" ] && return 0
+    rm -f "$rotate_path.1" 2>/dev/null || true
+    mv -f "$rotate_path" "$rotate_path.1" 2>/dev/null || true
+}
+rotate_log "$DIAG" 262144
 log(){ echo "$(date): LAUNCH $*" >> "$DIAG"; logger -t reading-records "$*"; }
 log "begin handler=$APP_ID path=$APP_DIR ui=$UI_VERSION script=$0"
 
