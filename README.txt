@@ -20,7 +20,7 @@ KPW3 / Kindle Voyage 等设备如果书库不显示 ReadingRecords.sh：
 - 新 UI 使用 handlerId com.krt.readingrecords.v34 和独立目录
   /mnt/us/reading-time/illusion/ReadingRecords-v34/，用于绕过旧 Mesquite/WAF 缓存。
 - UI 只使用 HTML/CSS/JavaScript，没有生成或内置图片。
-- 多台 Kindle 位于同一 Wi-Fi 且屏幕唤醒时，打开“阅读记录”会自动同步。
+- 两台 Kindle 位于同一 Wi-Fi、保持唤醒并同时打开“阅读记录”时自动同步。
 - 同步按事件去重，失败不影响本机统计，也不需要手机、电脑或云端。
 
 诊断文件：
