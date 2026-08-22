@@ -31,5 +31,5 @@ KPW3 / Kindle Voyage 等设备如果书库不显示 ReadingRecords.sh：
 - /mnt/us/reading-time/sync.log：局域网同步记录。
 
 成功日志应包含：
-installed successfully; handler=com.krt.readingrecords.v33; UI=v34-lan-sync;
+installed successfully; handler=com.krt.readingrecords.v33; UI=v40-measured-scroll;
 launcher=ReadingRecords.sh; kual=installed; data=preserved

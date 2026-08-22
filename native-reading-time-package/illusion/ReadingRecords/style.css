@@ -11,6 +11,9 @@ button:active{background:#000;color:#fff}
 .page{height:calc(100% - 76px);overflow:hidden}
 #detailPage{height:100%}
 #booksPage{overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+#booksList{overflow:visible}
+#todayPage{overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+#recentList{overflow:visible}
 .hidden{display:none!important}
 .day-switch{height:64px;line-height:64px;text-align:center;border-bottom:1px solid #aaa;font-size:30px;font-weight:bold;position:relative}
 .day-switch-btn{position:absolute;top:0;width:76px;height:63px;font-size:48px;line-height:55px}

@@ -8,7 +8,7 @@ APPREG_DB="/var/local/appreg.db"
 DIAG="/mnt/us/reading-time/reading-records-diagnostics.log"
 COVER_MAP="/mnt/us/reading-time/cover-map.tsv"
 CC_DB="/var/local/cc.db"
-UI_VERSION="v34-lan-sync"
+UI_VERSION="v40-measured-scroll"
 
 log(){ echo "$(date): LAUNCH $*" >> "$DIAG"; logger -t reading-records "$*"; }
 log "begin handler=$APP_ID path=$APP_DIR ui=$UI_VERSION script=$0"
