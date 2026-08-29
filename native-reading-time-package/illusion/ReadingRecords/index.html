@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
 <title>阅读记录</title>
-<link rel="stylesheet" href="style.css?v=48" />
+<link rel="stylesheet" href="style.css?v=52" />
 </head>
 <body>
 <div id="message" class="message"></div>
@@ -35,7 +35,7 @@
 </div>
 
 <div id="booksPage" class="page hidden">
-  <div class="sortbar"><span>所有书籍</span><button id="sortOpen" class="sort-btn">排序：<b id="sortLabel">最近阅读</b> ▾</button></div>
+  <div class="sortbar"><span id="scopeLabel" class="books-heading">所有书籍</span><button id="sortOpen" class="sort-btn">排序：<b id="sortLabel">最近阅读</b> ▾</button></div>
   <div id="booksList" class="list"></div>
   <div id="booksPager" class="pager hidden"></div>
 </div>
@@ -45,9 +45,13 @@
   <div id="detailBody"></div>
 </div>
 
-<div id="sortOverlay" class="overlay hidden">
-  <div class="dialog">
-    <div class="dialog-title">排序方式</div>
+<div id="sortOverlay" class="overlay filter-overlay hidden">
+  <div class="dialog filter-dialog">
+    <div class="dialog-title">筛选与排序</div>
+    <div class="dialog-section-title">显示范围</div>
+    <button class="scope-option" data-scope="local">本机书籍</button>
+    <button class="scope-option selected" data-scope="all">全部书籍</button>
+    <div class="dialog-section-title">排序方式</div>
     <button class="sort-option" data-sort="recent">最近阅读</button>
     <button class="sort-option" data-sort="total_desc">总阅读时长（从多到少）</button>
     <button class="sort-option" data-sort="total_asc">总阅读时长（从少到多）</button>
@@ -57,6 +61,6 @@
   </div>
 </div>
 
-<script src="script.js?v=48"></script>
+<script src="script.js?v=52"></script>
 </body>
 </html>

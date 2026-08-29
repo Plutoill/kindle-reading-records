@@ -2,13 +2,14 @@
 # Name: 阅读记录
 # Kindle Reading Records v1.3 launcher
 
-APP_ID="com.krt.readingrecords.v34"
-APP_DIR="/mnt/us/reading-time/illusion/ReadingRecords-v34"
+APP_ID="com.krt.readingrecords.v38"
+APP_DIR="/mnt/us/reading-time/illusion/ReadingRecords-v38"
 APPREG_DB="/var/local/appreg.db"
 DIAG="/mnt/us/reading-time/reading-records-diagnostics.log"
 COVER_MAP="/mnt/us/reading-time/cover-map.tsv"
+LOCAL_BOOKS="/mnt/us/reading-time/local-books.tsv"
 CC_DB="/var/local/cc.db"
-UI_VERSION="v48-bidirectional-sync-status"
+UI_VERSION="v52-visible-book-scope"
 
 rotate_log(){
     rotate_path="$1"; rotate_limit="$2"
@@ -44,6 +45,16 @@ if [ -f "$CC_DB" ]; then
     else
         rm -f "$COVER_MAP.new" 2>/dev/null || true
         log "cover map has no matched local entries"
+    fi
+
+    # Keep presence separate from cover availability: a local book without a
+    # thumbnail must still appear when the UI is filtered to this Kindle.
+    if sqlite3 "$CC_DB" "SELECT DISTINCT upper(replace(p_cdeKey,'-','')) FROM Entries WHERE p_cdeKey IS NOT NULL AND p_cdeKey<>'' AND p_location IS NOT NULL AND p_location<>'' ORDER BY 1;" > "$LOCAL_BOOKS.new" 2>> "$DIAG"; then
+        mv -f "$LOCAL_BOOKS.new" "$LOCAL_BOOKS"
+        log "local book map updated rows=$(wc -l < "$LOCAL_BOOKS" 2>/dev/null)"
+    else
+        rm -f "$LOCAL_BOOKS.new" 2>/dev/null || true
+        log "WARNING unable to query local book map; preserving previous map"
     fi
 else
     log "WARNING content catalog missing: $CC_DB"

@@ -5,9 +5,9 @@
 ROOT="/mnt/us"
 PKG="$ROOT/native-reading-time-package"
 BASE="$ROOT/reading-time"
-APP="$BASE/illusion/ReadingRecords-v34"
-APP_ID="com.krt.readingrecords.v34"
-OLD_APP_ID="com.krt.readingrecords.v33"
+APP="$BASE/illusion/ReadingRecords-v38"
+APP_ID="com.krt.readingrecords.v38"
+OLD_APP_ID="com.krt.readingrecords.v37"
 DB="/var/local/appreg.db"
 CONF="/etc/upstart/native-reading-time.conf"
 JOB="native-reading-time"
@@ -18,7 +18,7 @@ KUAL_DIR="$ROOT/extensions/reading-records"
 LOG="$BASE/reading-time-install.log"
 DIAG="$BASE/reading-records-diagnostics.log"
 ROOT_LOG="$ROOT/reading-time-install.log"
-UI_VERSION="v48-bidirectional-sync-status"
+UI_VERSION="v52-visible-book-scope"
 ROOT_RW=0
 
 rotate_log(){
@@ -124,8 +124,8 @@ done
 
 # Replace application code only. Reading history stays intact.
 if [ -d "$APP" ]; then
-    backup="$BASE/diagnostics/ReadingRecords-v34.previous.$(date +%s)"
-    mv "$APP" "$backup" 2>/dev/null || fail "无法备份旧 v34 UI"
+    backup="$BASE/diagnostics/ReadingRecords-v38.previous.$(date +%s)"
+    mv "$APP" "$backup" 2>/dev/null || fail "无法备份旧 v38 UI"
 fi
 mkdir -p "$APP" || fail "无法创建 UI 目录"
 cp -R "$PKG/illusion/ReadingRecords/." "$APP/" || fail "复制 WAF UI 失败"

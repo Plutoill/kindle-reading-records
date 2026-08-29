@@ -44,9 +44,9 @@ button:active{background:#000;color:#fff}
 .month-fill{display:block;height:7px;background:#000}
 .month-value{position:absolute;right:2px;width:205px;text-align:right;white-space:nowrap;font-size:22px;font-weight:normal;background:#fff;z-index:2;padding-left:8px}
 .hint{text-align:center;color:#666;font-size:22px;margin-top:12px}
-.sortbar{height:76px;border-bottom:2px solid #000;line-height:76px;font-size:29px;overflow:hidden;margin-top:18px}
-.sortbar>span{float:left;font-weight:bold}
-.sort-btn{float:right;font-size:25px;padding:0 4px}
+.sortbar{height:76px;border-bottom:2px solid #000;line-height:76px;overflow:hidden;margin-top:18px}
+.books-heading{float:left;font-size:29px;font-weight:bold;padding-left:4px}
+.sort-btn{float:right;height:76px;line-height:76px;font-size:25px;padding:0 4px;vertical-align:top}
 .detail-header{height:72px;border-bottom:2px solid #000;text-align:center;position:relative;line-height:70px;font-size:36px;font-weight:bold}
 #detailBody{height:calc(100% - 72px);overflow:hidden}
 #detailBody.month-scroll{overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
@@ -67,11 +67,16 @@ button:active{background:#000;color:#fff}
 .pager span{display:inline-block;width:130px;font-size:21px;line-height:56px;color:#555}
 .empty{text-align:center;color:#666;font-size:27px;padding-top:90px}
 .overlay{position:absolute;left:0;right:0;top:0;bottom:0;background:#fff;z-index:20;padding:100px 80px 0}
+.filter-overlay{padding-top:45px}
 .dialog{border:2px solid #000;background:#fff}
 .dialog-title{text-align:center;font-size:34px;font-weight:bold;padding:20px;border-bottom:2px solid #000}
+.dialog-section-title{height:44px;line-height:44px;padding:0 28px;font-size:22px;color:#555;border-bottom:1px solid #aaa}
 .sort-option{display:block;width:100%;height:72px;text-align:left;padding:0 28px;font-size:27px;border-bottom:1px solid #aaa}
-.sort-option.selected{font-weight:bold}
-.sort-option.selected:before{content:"✓  ";font-weight:bold}
+.scope-option{display:block;width:100%;height:72px;text-align:left;padding:0 28px;font-size:27px;border-bottom:1px solid #aaa}
+.sort-option.selected,.scope-option.selected{font-weight:bold}
+.sort-option.selected:before,.scope-option.selected:before{content:"✓  ";font-weight:bold}
 .dialog-cancel{display:block;width:100%;height:72px;font-size:27px}
+.filter-dialog .sort-option,.filter-dialog .scope-option{height:58px;font-size:24px}
+.filter-dialog .dialog-cancel{height:58px;font-size:24px}
 /* LAN synchronization status stays quiet and does not consume another toolbar row. */
 .sync-status{position:absolute;right:28px;bottom:14px;color:#666;font-size:18px;line-height:24px;z-index:3}
