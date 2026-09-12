@@ -1,5 +1,5 @@
 #!/bin/sh
-# Kindle Reading Records v1.3 — safe upgrade from v17.
+# Kindle Reading Records v1.3.5 — safe upgrade from v17.
 # Historical TSV files are never replaced or removed.
 
 ROOT="/mnt/us"
@@ -242,5 +242,5 @@ sync
 say "installed successfully; handler=$APP_ID; UI=$UI_VERSION; launcher=ReadingRecords.sh; kual=installed; data=preserved"
 diag "INSTALL OK handler=$APP_ID ui=$UI_VERSION launcher=$DOC kual=$KUAL_DIR"
 rootlog "installed successfully; detailed logs are inside /mnt/us/reading-time"
-toast "阅读记录 v1.3 已安装"
+toast "阅读记录 v1.3.5 已安装"
 exit 0
