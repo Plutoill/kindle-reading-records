@@ -1,4 +1,4 @@
-/* Reading Records v43: combined controls with visible book scope. */
+/* Reading Records v53: reset the daily view when the app is opened again. */
 (function(){
 "use strict";
 var DATA_URL="file:///mnt/us/reading-time/reading-time.tsv";
@@ -6,7 +6,8 @@ var SESSIONS_URL="file:///mnt/us/reading-time/reading-sessions.tsv";
 var COVERS_URL="file:///mnt/us/reading-time/cover-map.tsv";
 var LOCAL_BOOKS_URL="file:///mnt/us/reading-time/local-books.tsv";
 var SYNC_STATUS_URL="file:///mnt/us/reading-time/sync-status.tsv";
-var data=[],sessions=[],covers={},localBooks={},tab="today",sortMode="recent",bookScope="all",detail={type:null},detailPageIndex=0,booksPageIndex=0,todayPageIndex=0,selectedDate=todayKey(),lastSyncUpdate="";
+var OPEN_STATE_URL="file:///mnt/us/reading-time/ui-open-state.tsv";
+var data=[],sessions=[],covers={},localBooks={},tab="today",sortMode="recent",bookScope="all",detail={type:null},detailPageIndex=0,booksPageIndex=0,todayPageIndex=0,selectedDate=todayKey(),lastSyncUpdate="",lastOpenToken="",knownToday=todayKey();
 var DETAIL_PAGE_SIZE=8,MONTH_BAR_BASE=36000;
 var year=new Date().getFullYear();
 function $(id){return document.getElementById(id)}
@@ -25,6 +26,10 @@ function parseData(t){var out=[],ls=String(t||"").replace(/\r/g,"").split("\n"),
 function parseSessions(t){var out=[],ls=String(t||"").replace(/\r/g,"").split("\n"),i,p;for(i=0;i<ls.length;i++){if(!ls[i]||/^date\t/.test(ls[i]))continue;p=ls[i].split("\t");if(p.length>=5)out.push({date:p[0],start:p[1],end:p[2],id:p[3],title:p.slice(4).join("\t")||p[3]})}return out}
 function parseCovers(t){var map={},ls=String(t||"").replace(/\r/g,"").split("\n"),i,p,k;for(i=0;i<ls.length;i++){p=ls[i].split("\t");if(p.length>=2){k=String(p[0]||"").replace(/-/g,"").toUpperCase();if(k)map[k]=p.slice(1).join("\t")}}return map}
 function parseBookSet(t){var map={},ls=String(t||"").replace(/\r/g,"").split("\n"),i,k;for(i=0;i<ls.length;i++){k=bookKey(ls[i]);if(k)map[k]=1}return map}
+function resetDailyDate(day,redraw){selectedDate=/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(day||"")?day:todayKey();knownToday=todayKey();todayPageIndex=0;if(redraw&&tab==="today"&&$("detailPage").className.indexOf("hidden")>=0)renderToday()}
+function refreshCalendarDay(redraw){var day=todayKey();if(day!==knownToday)resetDailyDate(day,redraw)}
+function applyOpenState(t){var ls=String(t||"").replace(/\r/g,"").split("\n"),p=ls.length>1?ls[1].split("\t"):[],day=p[0]||todayKey(),token=p[1]||"";refreshCalendarDay(true);if(!token)return;if(token!==lastOpenToken)resetDailyDate(day,true);lastOpenToken=token}
+function pollOpenState(){read(OPEN_STATE_URL,function(t){applyOpenState(t||"");setTimeout(pollOpenState,1000)})}
 function pollSync(){read(SYNC_STATUS_URL,function(t){var ls=String(t||"").replace(/\r/g,"").split("\n"),p=ls.length>1?ls[1].split("\t"):[],state=p[0]||"syncing",updated=p[2]||"",labels={none:"未发现设备",found:"已发现设备",syncing:"正在同步",ok:"同步完成"},message=labels[state]||"正在同步",delay=(state==="found"||state==="syncing")?500:2000;$('syncStatus').innerHTML=message;if(state==="ok"&&updated&&updated!==lastSyncUpdate){lastSyncUpdate=updated;load(function(err){if(!err)setTab(tab);setTimeout(pollSync,2000)});return}setTimeout(pollSync,delay)})}
 function load(cb){read(DATA_URL,function(t,e){if(e){cb(e);return}data=parseData(t);read(SESSIONS_URL,function(s){sessions=parseSessions(s||"");read(COVERS_URL,function(c){covers=parseCovers(c||"");read(LOCAL_BOOKS_URL,function(l){localBooks=parseBookSet(l||"");cb(null)})})})})}
 function rowsDate(d){var a=[],i;for(i=0;i<data.length;i++)if(data[i].date===d)a.push(data[i]);return a}
@@ -42,7 +47,7 @@ function bookPageSize(){return 12}
 function viewportHeight(){return window.innerHeight||document.documentElement.clientHeight||document.body.clientHeight||800}
 function applyScrollHeights(){var vh=viewportHeight(),tabs=$("mainTabs"),mainHeight=Math.max(240,vh-(tabs.offsetHeight||76)-22),detailHeader=document.getElementsByClassName("detail-header")[0],detailHeight=Math.max(240,vh-(detailHeader.offsetHeight||72)-22);$("todayPage").style.height=mainHeight+"px";$("booksPage").style.height=mainHeight+"px";$("detailBody").style.height=detailHeight+"px"}
 function latestBooks(){return sortBooks(bookAgg(data)).slice(0,5)}
-function setTab(t){tab=t;$("mainTabs").className="tabs";$("todayPage").className="page"+(t!=="today"?" hidden":"");$("totalPage").className="page"+(t!=="total"?" hidden":"");$("booksPage").className="page"+(t!=="books"?" hidden":"");$("detailPage").className="page hidden";$("tabToday").className="tab"+(t==="today"?" active":"");$("tabTotal").className="tab"+(t==="total"?" active":"");$("tabBooks").className="tab"+(t==="books"?" active":"");applyScrollHeights();if(t==="today")renderToday();if(t==="total")renderTotal();if(t==="books")renderBooks()}
+function setTab(t){tab=t;$("mainTabs").className="tabs";$("todayPage").className="page"+(t!=="today"?" hidden":"");$("totalPage").className="page"+(t!=="total"?" hidden":"");$("booksPage").className="page"+(t!=="books"?" hidden":"");$("detailPage").className="page hidden";$("tabToday").className="tab"+(t==="today"?" active":"");$("tabTotal").className="tab"+(t==="total"?" active":"");$("tabBooks").className="tab"+(t==="books"?" active":"");applyScrollHeights();if(t==="today"){refreshCalendarDay(false);renderToday()}if(t==="total")renderTotal();if(t==="books")renderBooks()}
 function sizeTodayList(){var page=$("todayPage"),list=$("recentList");list.style.height="auto";list.scrollTop=0;page.scrollTop=0}
 function renderToday(){var d=selectedDate,t=sum(rowsDate(d)),books=bookAgg(rowsDate(d)).sort(function(a,b){return b.seconds-a.seconds}),size=bookPageSize(),pages=Math.max(1,Math.ceil(books.length/size)),start,end,h="";if(todayPageIndex>=pages)todayPageIndex=pages-1;start=todayPageIndex*size;end=Math.min(books.length,start+size);$("selectedDateLabel").innerHTML=dateLabel(d);$("nextDay").disabled=d>=todayKey();$("todayTotal").innerHTML=fmt(t);$("todaySummary").innerHTML="阅读"+books.length+"本";if(!books.length)h='<div class="empty">这一天没有阅读记录</div>';else for(var i=start;i<end;i++)h+=bookRow(books[i],d);$("recentList").innerHTML=h;if(pages>1){$("todayPager").className="pager";$("todayPager").innerHTML='<button data-today-page="prev">上一页</button><span>'+(todayPageIndex+1)+' / '+pages+'</span><button data-today-page="next">下一页</button>'}else{$("todayPager").className="pager hidden";$("todayPager").innerHTML=""}$("updatedAt").innerHTML="数据更新于 "+new Date().getHours()+":"+pad(new Date().getMinutes());sizeTodayList()}
 function lastReadText(b){var d=b.lastDate||"",tm=b.lastTime?(" "+b.lastTime):"";if(d===todayKey())return"今天"+tm;if(d===yesterdayKey())return"昨天"+tm;if(d.length>=10)return d.substr(5,2)+"月"+d.substr(8,2)+"日"+tm;return d+tm}
@@ -93,6 +98,6 @@ var booksTouchY=null;$("booksPage").ontouchstart=function(e){if(e.touches&&e.tou
 var todayTouchY=null;$("todayPage").ontouchstart=function(e){if(e.touches&&e.touches.length)todayTouchY=e.touches[0].clientY};$("todayPage").ontouchend=function(e){if(todayTouchY===null)return;var y=(e.changedTouches&&e.changedTouches.length)?e.changedTouches[0].clientY:todayTouchY,delta=todayTouchY-y;todayTouchY=null;if(Math.abs(delta)>30)$("todayPage").scrollTop=Math.max(0,$("todayPage").scrollTop+(delta>0?500:-500))};
 window.onresize=function(){applyScrollHeights();if(tab==="books"){booksPageIndex=0;renderBooks()}else if(tab==="today"){todayPageIndex=0;renderToday()}else if($("detailPage").className.indexOf("hidden")<0){detailPageIndex=0;showDetail()}};
 }
-function init(){bind();load(function(err){if(err){$("message").innerHTML="无法读取阅读数据";return}renderToday();pollSync()})}
+function init(){bind();load(function(err){if(err){$("message").innerHTML="无法读取阅读数据";return}resetDailyDate(todayKey(),false);renderToday();pollOpenState();pollSync()})}
 if(document.readyState==="complete"||document.readyState==="interactive")init();else document.addEventListener("DOMContentLoaded",init,false);
 })();
