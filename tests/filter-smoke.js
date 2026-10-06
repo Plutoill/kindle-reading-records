@@ -13,6 +13,7 @@ function run(argv) {
         rows.push({date:"2026-08-01", id:"L-" + i, seconds:60, title:"L" + i});
     }
     rows.push({date:"2026-08-01", id:"REMOTE", seconds:60, title:"R"});
+    rows.push({date:"2026-08-01", id:"LOW", seconds:59, title:"Below one minute"});
 
     source = source.replace(/\}\)\(\);\s*$/, [
         "tab='total';knownToday=todayKey();selectedDate='2026-08-01';lastOpenToken='old';",
@@ -22,11 +23,12 @@ function run(argv) {
         "if(selectedDate!=='2026-08-14')throw new Error('same app-open token reset current-session selection');",
         "data=TEST_ROWS;sessions=[];localBooks={};",
         "for(var z=0;z<12;z++)localBooks[bookKey('L-'+z)]=1;",
+        "localBooks[bookKey('LOW')]=1;",
         "bookScope='local';",
-        "if(booksForScope().length!==12)throw new Error('local filter failed');",
+        "if(booksForScope().length!==12)throw new Error('local scope or sub-minute filter failed');",
         "if(Math.ceil(booksForScope().length/bookPageSize())!==1)throw new Error('local pagination failed');",
         "bookScope='all';",
-        "if(booksForScope().length!==13)throw new Error('all filter failed');",
+        "if(booksForScope().length!==13)throw new Error('all scope or sub-minute filter failed');",
         "if(Math.ceil(booksForScope().length/bookPageSize())!==2)throw new Error('all pagination failed');",
         "})();"
     ].join(""));

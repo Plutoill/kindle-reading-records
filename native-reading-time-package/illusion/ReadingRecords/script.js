@@ -1,4 +1,4 @@
-/* Reading Records v53: reset the daily view when the app is opened again. */
+/* Reading Records v54: hide books read for less than 60 seconds from My Books. */
 (function(){
 "use strict";
 var DATA_URL="file:///mnt/us/reading-time/reading-time.tsv";
@@ -8,7 +8,7 @@ var LOCAL_BOOKS_URL="file:///mnt/us/reading-time/local-books.tsv";
 var SYNC_STATUS_URL="file:///mnt/us/reading-time/sync-status.tsv";
 var OPEN_STATE_URL="file:///mnt/us/reading-time/ui-open-state.tsv";
 var data=[],sessions=[],covers={},localBooks={},tab="today",sortMode="recent",bookScope="all",detail={type:null},detailPageIndex=0,booksPageIndex=0,todayPageIndex=0,selectedDate=todayKey(),lastSyncUpdate="",lastOpenToken="",knownToday=todayKey();
-var DETAIL_PAGE_SIZE=8,MONTH_BAR_BASE=36000;
+var DETAIL_PAGE_SIZE=8,MONTH_BAR_BASE=36000,MIN_BOOK_SECONDS=60;
 var year=new Date().getFullYear();
 function $(id){return document.getElementById(id)}
 function pad(n){return n<10?"0"+n:""+n}
@@ -42,7 +42,7 @@ for(k in map)if(map.hasOwnProperty(k))a.push(map[k]);return a}
 function bookCount(b,dateScope){var c=0,i;for(i=0;i<sessions.length;i++)if(sessions[i].id===b.id&&(!dateScope||sessions[i].date===dateScope))c++;if(c)return c;if(dateScope){for(i=0;i<data.length;i++)if(data[i].id===b.id&&data[i].date===dateScope)return 1;return 0}return b.count}
 function sortBooks(a){a=a.slice(0);a.sort(function(x,y){if(sortMode==="total_desc")return y.seconds-x.seconds;if(sortMode==="total_asc")return x.seconds-y.seconds;if(sortMode==="count_desc")return bookCount(y)-bookCount(x)||y.seconds-x.seconds;if(sortMode==="count_asc")return bookCount(x)-bookCount(y)||y.seconds-x.seconds;return y.lastDate.localeCompare(x.lastDate)||y.seconds-x.seconds});return a}
 function bookKey(id){return String(id||"").replace(/-/g,"").replace(/^\s+|\s+$/g,"").toUpperCase()}
-function booksForScope(){var books=bookAgg(data),out=[],i;if(bookScope==="all")return books;for(i=0;i<books.length;i++)if(localBooks[bookKey(books[i].id)])out.push(books[i]);return out}
+function booksForScope(){var books=bookAgg(data),out=[],i;for(i=0;i<books.length;i++){if(books[i].seconds<MIN_BOOK_SECONDS)continue;if(bookScope==="all"||localBooks[bookKey(books[i].id)])out.push(books[i])}return out}
 function bookPageSize(){return 12}
 function viewportHeight(){return window.innerHeight||document.documentElement.clientHeight||document.body.clientHeight||800}
 function applyScrollHeights(){var vh=viewportHeight(),tabs=$("mainTabs"),mainHeight=Math.max(240,vh-(tabs.offsetHeight||76)-22),detailHeader=document.getElementsByClassName("detail-header")[0],detailHeight=Math.max(240,vh-(detailHeader.offsetHeight||72)-22);$("todayPage").style.height=mainHeight+"px";$("booksPage").style.height=mainHeight+"px";$("detailBody").style.height=detailHeight+"px"}
